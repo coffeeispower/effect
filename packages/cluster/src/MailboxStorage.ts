@@ -44,6 +44,7 @@ export interface MailboxStorage extends MailboxStorage.Proto {
     NoSuchElementException | MessagePersistenceError,
     Serializable.Context<Msg>
   >
+
   /**
    * Updates the specified message using the provided `MessageState`.
    */
