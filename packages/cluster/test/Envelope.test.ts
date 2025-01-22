@@ -7,7 +7,6 @@ import * as Snowflake from "@effect/cluster/Snowflake"
 import { describe, expect, it } from "@effect/vitest"
 import { Context } from "effect"
 import * as Effect from "effect/Effect"
-import * as PrimaryKey from "effect/PrimaryKey"
 import * as Schema from "effect/Schema"
 
 class SampleMessage extends Schema.TaggedRequest<SampleMessage>()("SampleMessage", {
@@ -18,11 +17,7 @@ class SampleMessage extends Schema.TaggedRequest<SampleMessage>()("SampleMessage
     name: Schema.String,
     date: Schema.Date
   }
-}) {
-  [PrimaryKey.symbol](): string {
-    return this.id.toString()
-  }
-}
+}) {}
 
 describe("Envelope", () => {
   it.effect("should serialize an Envelope", () =>

@@ -5,16 +5,18 @@ import * as Fiber from "effect/Fiber"
 import * as Mailbox from "effect/Mailbox"
 import * as Metric from "effect/Metric"
 import * as Option from "effect/Option"
+import { hasProperty } from "effect/Predicate"
 import * as RcMap from "effect/RcMap"
 import * as Schema from "effect/Schema"
 import * as Scope from "effect/Scope"
+import * as Stream from "effect/Stream"
+import * as ClusterSchema from "../ClusterSchema.js"
 import { type Entity, makeEnvelopeSchema } from "../Entity.js"
 import type { EntityAddress } from "../EntityAddress.js"
 import type { Envelope } from "../Envelope.js"
 import type { Sharding } from "../Sharding.js"
 import type { ShardingConfig } from "../ShardingConfig.js"
 import { EntityNotManagedByPod, MalformedMessage } from "../ShardingError.js"
-import type { ShardingProtocol } from "../ShardingProtocol.js"
 import * as InternalMetrics from "./metrics.js"
 import * as InternalShardingCircular from "./sharding/circular.js"
 import * as InternalShardingConfig from "./shardingConfig.js"
@@ -112,10 +114,12 @@ export const make: <Protocol extends Entity.AnyProtocol>(
       Schema.WithResult.Failure<Msg>
     >
   ) {
-    return Effect.sync(() => {
+    return Effect.suspend(() => {
       const entry = messageToEnvelope.get(message)
       if (entry === undefined) return Effect.void
       entry.resume(Effect.succeed(result))
+      messageToEnvelope.delete(message)
+      return RcMap.touch(entities, entry.envelope.address)
     })
   }
 
@@ -126,9 +130,13 @@ export const make: <Protocol extends Entity.AnyProtocol>(
     done: replyDone
   }
 
+  // TODO: For stream messages, keep the address scope open until the stream
+  // is done. Add Stream.ensuring to the stream?
   function send<Version extends string, Msg extends Envelope.AnyMessage>(
     envelope: Envelope<Version, Msg>
   ): Effect.Effect<Exit.Exit<Schema.WithResult.Success<Msg>, Schema.WithResult.Failure<Msg>>, EntityNotManagedByPod> {
+    const isStream = ClusterSchema.isStreamSerializable(envelope.message)
+
     return RcMap.get(entities, envelope.address).pipe(
       Effect.flatMap((mailbox) =>
         Effect.async<Exit.Exit<Schema.WithResult.Success<Msg>, Schema.WithResult.Failure<Msg>>>((resume) => {
